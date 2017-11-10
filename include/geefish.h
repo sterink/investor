@@ -14,7 +14,7 @@ using namespace std;
 
 namespace GeeFish {
 class gfObject {
-private:
+public:
 	int64_t st;
 public:
 	gfObject() {
@@ -42,7 +42,7 @@ public:
 	std::list<Hand> hands() const;
 public:
 	class Impl;
-	std::shared_ptr<Impl> mImpl;
+	std::shared_ptr<Impl> pImpl;
 };
 class Image: public gfObject {
 public:
@@ -57,7 +57,7 @@ public:
 	int width() const;
 public:
 	class Impl;
-	std::shared_ptr<Impl> mImpl;
+	std::shared_ptr<Impl> pImpl;
 };
 
 class Gesture: public gfObject {
@@ -120,7 +120,7 @@ public:
 	Frame frame();
 public:
 	class Impl;
-	std::shared_ptr<Impl> mImpl;
+	std::shared_ptr<Impl> pImpl;
 };
 class Bone {
 public:
@@ -138,12 +138,16 @@ public:
 		TYPE_DISTAL = 3,       /**< Bone at the tip of the finger */
 	};
 
-	Vector prevJoint() const;
-	Vector jointPosition(Joint jointIx) const;
+public:
+	class Impl;
+	std::shared_ptr<Impl> pImpl;
 };
 
-class Finger:public gfObject{
+class Finger: public gfObject {
 	Bone bone(Bone::Type boneIx) const;
+public:
+	class Impl;
+	std::shared_ptr<Impl> pImpl;
 };
 
 class Hand: public gfObject {
@@ -154,7 +158,6 @@ public:
 	enum State {
 	};
 	Hand();
-	~Hand();
 	Type type();
 	State state();
 	Frame frame();
@@ -162,7 +165,7 @@ public:
 	std::list<Finger> fingers() const;
 public:
 	class Impl;
-	std::shared_ptr<Impl> mImpl;
+	std::shared_ptr<Impl> pImpl;
 };
 
 class Listener {
@@ -183,15 +186,16 @@ public:
 class Controller {
 public:
 	Controller();
-	virtual ~Controller();
 	bool addObs(Listener& listener);
 	bool removeObs(Listener& listener);
-	std::list<std::shared_ptr<Device> > devices() const;
-	std::shared_ptr<Frame> frame(int history = 0) const;
+	std::list<Device> devices() const;
+	Frame frame(int history = 0) const;
 	void enableGesture(Gesture::Type type, bool enable = true) const;
 	bool isGestureEnabled(Gesture::Type type) const;
+
 public:
-	const char *report() {}
+	class Impl;
+	std::shared_ptr<Impl> pImpl;
 };
 class Device {
 	enum Type {};
@@ -199,6 +203,7 @@ public:
 	Device();
 public:
 	class Impl;
-	std::shared_ptr<Impl> mImpl;
+	std::shared_ptr<Impl> pImpl;
 };
+void test();
 };

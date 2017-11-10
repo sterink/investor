@@ -5,141 +5,48 @@
 #include <pthread.h>
 using namespace std;
 
+#include <semaphore.h>
+#include <time.h>
+
 #include "geefish.h"
 #include "gf_cv.h"
 
 namespace GeeFish {
+Controller *dancer = NULL;
 
-std::map<const void *, void *> docker;
-class ControllerImp;
-std::shared_ptr<ControllerImp> ppp;
-
-class GestureImp;
-class HandImp;
-class FrameImp {
-public:
-	Gesture ges;
-	Hand hands;
-	std::list<std::shared_ptr<Image> >images;
-public:
-	// fill images
-	void fill() {
-
-	}
-};
-
-class HandImp {
-public:
-	Hand::Type type;
-	Hand::State state;
-	std::shared_ptr<Frame> frame;
-};
-
-
-class GestureImp {
-public:
-	Gesture::Type type;
-	Gesture::State state;
-	std::shared_ptr<Frame> frame;
-public:
-	GestureImp() {}
-};
-
-Gesture::Gesture() {
-	GestureImp *tmp = new GestureImp();
-	docker[this] = tmp;
-}
-Gesture::~Gesture() {
-	GestureImp *tmp = (GestureImp *)docker[this];
-	delete tmp;
-	// free slot in docker
-	docker.erase(this);
-}
-
-Gesture::Type Gesture::type() {
-	GestureImp *imp = (GestureImp *)docker[this];
-	return imp->type;
-}
-Gesture::State Gesture::state() {
-	GestureImp *imp = (GestureImp *)docker[this];
-	return imp->state;
-}
-std::shared_ptr<Frame> Gesture::frame() {
-	GestureImp *imp = (GestureImp *)docker[this];
-	return imp->frame;
-}
-Frame::Frame() {
-	FrameImp *tmp = new FrameImp();
-	docker[this] = tmp;
-}
-Frame::~Frame() {
-	FrameImp *tmp = (FrameImp *)docker[this];
-	delete tmp;
-	docker.erase(this);
-}
-
-Hand::Hand() {
-	HandImp *tmp = new HandImp();
-	docker[this] = tmp;
-}
-Hand::~Hand() {
-	HandImp *tmp = (HandImp *)docker[this];
-	delete tmp;
-	docker.erase(this);
-}
-
-
-Hand::Type Hand::type() {
-	HandImp *imp = (HandImp *)docker[this];
-	return imp->type;
-}
-Hand::State Hand::state() {
-	HandImp *imp = (HandImp *)docker[this];
-	return imp->state;
-}
-std::shared_ptr<Frame> Hand::frame() {
-	HandImp *imp = (HandImp *)docker[this];
-	return imp->frame;
-}
-
-class ImageImp;
-
-#include <pthread.h>
-#include <time.h>
-
-class ControllerImp {
-	Controller *ctl;
+class Controller::Impl {
 	std::list<Listener *> obs;
-	std::list<shared_ptr<Frame> > frames;
+	std::list<Frame> frames_;
+	std::list<Device> devices_;
 
 	sem_t mutex1, mutex2;
-
+	friend Controller;
 private:
 	void *cv_thrd(void *p) {
-		ControllerImp *imp = (ControllerImp *)p;
+		Controller::Impl *imp = (Controller::Impl *)p;
 		while (true) {
 			sem_post(&mutex2);
 			sem_wait (&mutex1);
-			shared_ptr<Frame> pFrame = frames.front();
+			Frame frame = frames_.front();
 			sleep(3);
 			cerr << "done\n";
 			// retrieve the analysis result
 		}
 	}
 public:
-	ControllerImp(Controller *parter): ctl(parter) {
+	Impl() {
 		sem_init(&mutex1, 0, 1);
 		sem_init(&mutex2, 0, 1);
+		Device device;
+		devices_.push_back(device);
 	}
-	static void handler(void *data) {
-		Frame *p = new Frame();
-		FrameImp *imp = (FrameImp *)docker[p];
+
+	void handler(void *data) {
 		// set gestures and hands
 		// if hand gesture middleware is busy, use the previous result
 		// then use the result from middleware
 
 		// call cv algorithm to process current frame
-		shared_ptr<Frame> current(p);
 		// check whether cv_thrd is busy or not
 		if (0 == sem_trywait(&mutex2)) {
 			// cv thrd is idle
@@ -154,13 +61,14 @@ public:
 
 
 		}
+		Frame current;
 		// notify observers of the event
-		ppp->frames.push_back(current);
+		dancer->pImpl->frames_.push_back(current);
 
-		list<Listener*>::iterator it = ppp->obs.begin();
-		while (it != ppp->obs.end())
+		list<Listener*>::iterator it = dancer->pImpl->obs.begin();
+		while (it != dancer->pImpl->obs.end())
 		{
-			((Listener* )(*it))->onFrame(*ppp->ctl);
+			((Listener* )(*it))->onFrame(*dancer);
 			++it;
 		}
 	}
@@ -173,57 +81,150 @@ public:
 		obs.remove(&listener);
 		return true;
 	}
-	std::shared_ptr<Frame> frame(int history = 0) {
-		return frames.front();
+	Frame frame(int history = 0) {
+		return frames_.front();
+	}
+	std::list<Device> devices() const {
+		return devices_;
 	}
 };
 
+class Device::Impl {
+	bool running;
+private:
+	pthread_t task;
+	static void *thr_fn(void *p) {
+		Device::Impl *that = (Device::Impl *)p;
+		// pthread_mutex_lock(&mutex);
+		while (that->running) {
+			sleep(1);
+			cerr << "device new frame arrives \n";
+			if (dancer) dancer->pImpl->handler(NULL);
+		}
+		// pthread_mutex_unlock(&mutex);
+		return NULL;
+	}
+public:
+	Impl() {
+		running = true;
+		pthread_create(&task, NULL, &thr_fn, this);
+	}
+	~Impl() {
+		running = false;
+	}
+};
+
+class Image::Impl {
+public:
+	Frame frame;
+
+};
+class Frame::Impl {
+public:
+	std::list<Gesture> gestures;
+	Gesture sss;
+	std::list<Hand> hands;
+	std::list<Image>images;
+public:
+	// fill images
+	void fill() {
+
+	}
+	Impl() {
+		cerr << "Frame::Impl constructor \n";
+	}
+	~Impl() {
+		gestures.clear();
+		cerr << "Frame::Impl destructor \n";
+	}
+};
+
+class Hand::Impl {
+public:
+	Hand::Type type;
+	Hand::State state;
+	Frame frame;
+};
+
+
+class Gesture::Impl {
+public:
+	Gesture::Type type;
+	Gesture::State state;
+	Frame frame;
+public:
+	Impl() {
+		cerr << "Gesture::Impl constructor \n";
+	}
+	~Impl() {
+		cerr << "Gesture::Impl destructor \n";
+	}
+};
+
+Gesture::Gesture(): pImpl(new Impl()) {
+}
+Gesture::~Gesture() {
+	cerr << pImpl.use_count() << endl;
+}
+
+Gesture::Type Gesture::type() {
+	return pImpl->type;
+}
+Gesture::State Gesture::state() {
+	return pImpl->state;
+}
+Frame Gesture::frame() {
+	return pImpl->frame;
+}
+Frame::Frame(): pImpl(new Impl) {
+}
+Frame::~Frame() {
+}
+
+Hand::Hand(): pImpl(new Impl) {
+}
+Frame Hand::frame() {
+	return pImpl->frame;
+}
+
+
+Hand::Type Hand::type() {
+	return pImpl->type;
+}
+Hand::State Hand::state() {
+	return pImpl->state;
+}
+
+
+Controller::Controller(): pImpl(new Impl()) {
+	dancer = this;
+}
 bool Controller::addObs(Listener& listener) {
-	ControllerImp *imp = (ControllerImp *)docker[this];
-	imp->addObs(listener);
+	return pImpl->addObs(listener);
 }
 bool Controller::removeObs(Listener& listener) {
-	ControllerImp *imp = (ControllerImp *)docker[this];
-	imp->removeObs(listener);
+	return pImpl->removeObs(listener);
 }
-std::list<std::shared_ptr<Device> > Controller::devices() const {
-	ControllerImp *imp = (ControllerImp *)docker[this];
-	// return device;
+std::list<Device> Controller::devices() const {
+	return pImpl->devices_;
 }
-std::shared_ptr<Frame> Controller::frame(int history) const {
-	return NULL;
+Frame Controller::frame(int history) const {
+	return pImpl->frames_.front();
 }
 void Controller::enableGesture(Gesture::Type type, bool enable) const {}
 bool Controller::isGestureEnabled(Gesture::Type type) const {}
 
-Controller::Controller() {
-	// construct a device
-	Device *device = new Device(this);
-	ControllerImp *tmp = new ControllerImp(this);
-	docker[this] = tmp;
+Device::Device(): pImpl(new Impl()) {
 }
 
-Controller::~Controller() {
-	ControllerImp *imp = (ControllerImp *)docker[this];
-	delete imp;
-	docker.erase(this);
-}
 
-void *thr_fn(void *p) {
-	Device *that = (Device *)p;
-	// pthread_mutex_lock(&mutex);
-	while (true) {
-		sleep(1);
-		ppp->handler(NULL);
-	}
-	// pthread_mutex_unlock(&mutex);
-	cout << "thread exit\n";
-	return NULL;
-}
-Device::Device(Controller *ctl) {
-	std::shared_ptr<ControllerImp> tmp((ControllerImp *)docker[ctl]);
-	ppp = tmp;
-	pthread_t task;
-	pthread_create(&task, NULL, &thr_fn, this);
+void test()
+{
+	Frame frame;
+	Gesture gesture;
+	cerr << "xx\n";
+	frame.pImpl->sss = gesture;
+	cerr << "xx\n";
+	gesture.pImpl->frame = frame;
 }
 }

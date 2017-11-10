@@ -11,6 +11,10 @@ class SampleListener : public Listener {
 };
 
 int main(){
+	{
+		GeeFish::test();
+		return 0;
+	}
 	SampleListener listener;
 	GeeFish::Controller ctl;
 	ctl.addObs(listener);

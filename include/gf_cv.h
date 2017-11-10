@@ -7,4 +7,4 @@
 \******************************************************************************/
 #pragma once
 #include "geefish.h"
-Gesture::Type gf_cv_handler();
+GeeFish::Gesture::Type gf_cv_handler();

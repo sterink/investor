@@ -1044,5 +1044,3 @@ struct Matrix
 };
 
 }; // namespace GeeFish
-
-#endif // __GeeFishMath_h__
